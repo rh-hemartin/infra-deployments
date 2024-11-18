@@ -2,7 +2,7 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-- https://github.com/kubearchive/kubearchive/releases/download/v0.3.0/kubearchive.yaml?timeout=90
+- https://github.com/kubearchive/kubearchive/releases/download/v0.4.0/kubearchive.yaml?timeout=90
 - rbac.yaml
 # This alternative service is needed because the operator creates the
 # ApiServerSource pointing to <namespace>-sink, and here namespace is
@@ -13,6 +13,9 @@ resources:
 #   "product-kubearchive-a13e" is invalid: namespaces: Invalid value: "null": namespaces in body
 #    must be of type array: "null"
 - alternative-service.yaml
+# The operator assumes that the service account is built from the namespace, which is not
+# the case. This needs to be patched on KubeArchive, so this is a workaround
+- alternative-serviceaccount.yaml
 
 # ROSA does not support namespaces starting with `kube`
 namespace: product-kubearchive
@@ -20,6 +23,16 @@ namespace: product-kubearchive
 patches:
 # These patches changes some resources that point directly to
 # the 'kubearchive' namespace in their function.
+- patch: |-
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: RoleBinding
+    metadata:
+      name: kubearchive-sink-watch
+      namespace: kubearchive
+    subjects:
+    - kind: ServiceAccount
+      name: product-kubearchive-sink
+      namespace: product-kubearchive
 - patch: |-
     apiVersion: rbac.authorization.k8s.io/v1
     kind: RoleBinding
@@ -124,13 +137,6 @@ patches:
         spec:
           containers:
             - name: kubearchive-api-server
-              resources:
-                requests:
-                  cpu: 50m
-                  memory: 50Mi
-                limits:
-                  cpu: 100m
-                  memory: 50Mi
               securityContext:
                 readOnlyRootFilesystem: true
                 runAsNonRoot: true
@@ -154,6 +160,7 @@ patches:
               securityContext:
                 readOnlyRootFilesystem: true
                 runAsNonRoot: true
+# Here we change the serviceAccount due to an error on KubeArchive
 - patch: |-
     apiVersion: apps/v1
     kind: Deployment
@@ -162,16 +169,10 @@ patches:
       namespace: kubearchive
     spec:
       template:
+        serviceAccount: product-kubearchive-sink
         spec:
           containers:
             - name: kubearchive-sink
-              resources:
-                requests:
-                  cpu: 50m
-                  memory: 50Mi
-                limits:
-                  cpu: 100m
-                  memory: 50Mi
               securityContext:
                 readOnlyRootFilesystem: true
                 runAsNonRoot: true
