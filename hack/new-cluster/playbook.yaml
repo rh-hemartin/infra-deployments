@@ -58,7 +58,6 @@
       - cost-management
       - etcd-shield
       - integration
-      - knative-eventing
       - konflux-info
       - konflux-rbac
       - konflux-ui
